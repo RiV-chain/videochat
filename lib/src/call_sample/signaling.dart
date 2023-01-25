@@ -131,10 +131,10 @@ class Signaling {
     }
   }
 
-  void muteMic() {
+  void muteMic(bool isMute) {
     if (_localStream != null) {
-      bool enabled = _localStream!.getAudioTracks()[0].enabled;
-      _localStream!.getAudioTracks()[0].enabled = !enabled;
+//      bool enabled = _localStream!.getAudioTracks()[0].enabled;
+      _localStream!.getAudioTracks()[0].enabled = !isMute;
     }
   }
 
@@ -321,7 +321,7 @@ class Signaling {
     };
 
     _socket?.onMessage = (message) {
-      print('Received data: ' + message);
+      if (message != '{}') print('Received data: ' + message);
       onMessage(_decoder.convert(message));
     };
 
@@ -389,7 +389,7 @@ class Signaling {
           await createStream(media, screenSharing, context: _context);
     print(_iceServers);
     RTCPeerConnection pc = await createPeerConnection({
-      ..._iceServers,
+//      ..._iceServers,
       ...{'sdpSemantics': sdpSemantics}
     }, _config);
     if (media != 'data') {

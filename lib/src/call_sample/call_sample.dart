@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'dart:core';
 import '../widgets/screen_select_dialog.dart';
+import '../utils/stats_report.dart';
 import 'signaling.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
@@ -21,7 +24,10 @@ class _CallSampleState extends State<CallSample> {
   RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   bool _inCalling = false;
   Session? _session;
-  DesktopCapturerSource? selected_source_;
+  StatsReportUtil _stats = StatsReportUtil();
+  bool _isShowStats = false;
+  bool _isMute = false;
+  //DesktopCapturerSource? selected_source_;
   bool _waitAccept = false;
 
   // ignore: unused_element
@@ -63,12 +69,17 @@ class _CallSampleState extends State<CallSample> {
         case CallState.CallStateNew:
           setState(() {
             _session = session;
+            _startStats();
           });
           break;
         case CallState.CallStateRinging:
-          bool? accept = await _showAcceptDialog();
-          if (accept!) {
+          VideoSource? accept = await _showAcceptDialog();
+          if (accept != null) {
             _accept();
+            //TODO Do not open camera first
+            if (accept == VideoSource.Screen) {
+              await switchToScreenSharing(context);
+            }
             setState(() {
               _inCalling = true;
             });
@@ -91,7 +102,7 @@ class _CallSampleState extends State<CallSample> {
           break;
         case CallState.CallStateInvite:
           _waitAccept = true;
-          _showInvateDialog();
+          _showInviteDialog();
           break;
         case CallState.CallStateConnected:
           if (_waitAccept) {
@@ -129,27 +140,35 @@ class _CallSampleState extends State<CallSample> {
     });
   }
 
-  Future<bool?> _showAcceptDialog() {
-    return showDialog<bool?>(
+  Future<VideoSource?> _showAcceptDialog() {
+    return showDialog<VideoSource?>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text("title"),
-          content: Text("accept?"),
+          title: Text("Incoming call"),
+          content:
+              Text(_session!.pid + " invites to a video meeting. Accept it?"),
           actions: <Widget>[
             MaterialButton(
               child: Text(
                 'Reject',
                 style: TextStyle(color: Colors.red),
               ),
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(context).pop(null),
             ),
             MaterialButton(
               child: Text(
-                'Accept',
+                'Camera',
                 style: TextStyle(color: Colors.green),
               ),
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(context).pop(VideoSource.Camera),
+            ),
+            MaterialButton(
+              child: Text(
+                'Screen',
+                style: TextStyle(color: Colors.green),
+              ),
+              onPressed: () => Navigator.of(context).pop(VideoSource.Screen),
             ),
           ],
         );
@@ -157,13 +176,15 @@ class _CallSampleState extends State<CallSample> {
     );
   }
 
-  Future<bool?> _showInvateDialog() {
+  Future<bool?> _showInviteDialog() {
     return showDialog<bool?>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text("title"),
-          content: Text("waiting"),
+          title: Text("Outgoing call"),
+          content: Text("The invite sent to " +
+              _session!.pid +
+              ". Waiting for accept..."),
           actions: <Widget>[
             TextButton(
               child: Text("cancel"),
@@ -206,7 +227,7 @@ class _CallSampleState extends State<CallSample> {
     _signaling?.switchCamera();
   }
 
-  Future<void> selectScreenSourceDialog(BuildContext context) async {
+  Future<MediaStream?> selectScreenSourceDialog(BuildContext context) async {
     MediaStream? screenStream;
     if (WebRTC.platformIsDesktop) {
       final source = await showDialog<DesktopCapturerSource>(
@@ -238,11 +259,29 @@ class _CallSampleState extends State<CallSample> {
         'video': true,
       });
     }
+    return screenStream;
+  }
+
+  Future<void> switchToScreenSharing(BuildContext context) async {
+    MediaStream? screenStream = await selectScreenSourceDialog(context);
     if (screenStream != null) _signaling?.switchToScreenSharing(screenStream);
   }
 
   _muteMic() {
-    _signaling?.muteMic();
+    _signaling?.muteMic(_isMute);
+  }
+
+  _startStats() {
+    Timer.periodic(
+        const Duration(milliseconds: StatsReportUtil.STATS_INTERVAL_MS),
+        (timer) async {
+      if (_session == null) {
+        print('Stats stop');
+        timer.cancel();
+      }
+      _stats.updateStatsReport(await _session!.pc!.getStats());
+      setState(() {});
+    });
   }
 
   _buildRow(context, peer) {
@@ -250,8 +289,8 @@ class _CallSampleState extends State<CallSample> {
     return ListBody(children: <Widget>[
       ListTile(
         title: Text(self
-            ? peer['name'] + ', ID: ${peer['id']} ' + ' [Your self]'
-            : peer['name'] + ', ID: ${peer['id']} '),
+            ? peer['name'] + ', ID: ${peer['id']} [Your self]'
+            : peer['name'] + ', ID: ${peer['id']} [${peer['address']}]'),
         onTap: null,
         trailing: SizedBox(
             width: 100.0,
@@ -281,20 +320,20 @@ class _CallSampleState extends State<CallSample> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('P2P Call Sample' +
+        title: Text('P2P Video Call' +
             (_selfId != null ? ' [Your ID ($_selfId)] ' : '')),
         actions: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: null,
-            tooltip: 'setup',
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.settings),
+          //   onPressed: null,
+          //   tooltip: 'setup',
+          // ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _inCalling
           ? SizedBox(
-              width: 240.0,
+              width: 320.0,
               child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
@@ -306,7 +345,7 @@ class _CallSampleState extends State<CallSample> {
                     FloatingActionButton(
                       child: const Icon(Icons.desktop_mac),
                       tooltip: 'Screen Sharing',
-                      onPressed: () => selectScreenSourceDialog(context),
+                      onPressed: () => switchToScreenSharing(context),
                     ),
                     FloatingActionButton(
                       onPressed: _hangUp,
@@ -315,9 +354,24 @@ class _CallSampleState extends State<CallSample> {
                       backgroundColor: Colors.pink,
                     ),
                     FloatingActionButton(
-                      child: const Icon(Icons.mic_off),
+                      child: const Icon(Icons.info),
+                      tooltip: 'Connection Info',
+                      onPressed: () {
+                        _isShowStats = !_isShowStats;
+                        setState(() {});
+                      },
+                      backgroundColor: Colors.purple,
+                    ),
+                    FloatingActionButton(
+                      child: _isMute
+                          ? const Icon(Icons.mic_off)
+                          : const Icon(Icons.mic),
                       tooltip: 'Mute Mic',
-                      onPressed: _muteMic,
+                      onPressed: () {
+                        _isMute = !_isMute;
+                        setState(() {});
+                        _muteMic();
+                      },
                     )
                   ]))
           : null,
@@ -338,15 +392,24 @@ class _CallSampleState extends State<CallSample> {
                         decoration: BoxDecoration(color: Colors.black54),
                       )),
                   Positioned(
+                      left: 20.0,
+                      top: 20.0,
+                      child: Container(
+                        width:
+                            orientation == Orientation.portrait ? 90.0 : 120.0,
+                        height:
+                            orientation == Orientation.portrait ? 120.0 : 90.0,
+                        child: RTCVideoView(_localRenderer, mirror: true),
+                        decoration: BoxDecoration(color: Colors.black54),
+                      )),
+                  Positioned(
                     left: 20.0,
-                    top: 20.0,
+                    top: 200.0,
                     child: Container(
-                      width: orientation == Orientation.portrait ? 90.0 : 120.0,
-                      height:
-                          orientation == Orientation.portrait ? 120.0 : 90.0,
-                      child: RTCVideoView(_localRenderer, mirror: true),
-                      decoration: BoxDecoration(color: Colors.black54),
-                    ),
+                        width: 300.0,
+                        height: 200.0,
+                        child: Visibility(
+                            child: Text(_stats.value), visible: _isShowStats)),
                   ),
                 ]),
               );

@@ -104,11 +104,13 @@ class _DataChannelSampleState extends State<DataChannelSample> {
   }
 
   _handleDataChannelTest(Timer timer) async {
-    String text =
-        'Say hello ' + timer.tick.toString() + ' times, from [$_selfId]';
-    _dataChannel
-        ?.send(RTCDataChannelMessage.fromBinary(Uint8List(timer.tick + 1)));
-    _dataChannel?.send(RTCDataChannelMessage(text));
+    if (_dataChannel?.state == RTCDataChannelState.RTCDataChannelOpen) {
+      String text =
+          'Say hello ' + timer.tick.toString() + ' times, from [$_selfId]';
+      _dataChannel
+          ?.send(RTCDataChannelMessage.fromBinary(Uint8List(timer.tick + 1)));
+      _dataChannel?.send(RTCDataChannelMessage(text));
+    } else {}
   }
 
   _invitePeer(context, peerId) async {

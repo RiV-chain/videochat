@@ -11,7 +11,56 @@ void main() => runApp(new MyApp());
 
 class MyApp extends StatefulWidget {
   @override
-  _MyAppState createState() => new _MyAppState();
+  _MyAppState2 createState() => new _MyAppState2();
+}
+
+class _MyAppState2 extends State<MyApp> {
+  String _server = '';
+  late SharedPreferences _prefs;
+
+  @override
+  initState() async {
+    super.initState();
+    _prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _server = _prefs.getString('server') ?? 'sl.rivchain.org';
+    });
+  }
+
+  @override
+  Widget build(BuildContext _) {
+    return MaterialApp(
+        home: Scaffold(
+            appBar: AppBar(
+              title: Text('Flutter-WebRTC example'),
+            ),
+            body: AlertDialog(
+                title: const Text('Enter server address:'),
+                content: TextField(
+                  onChanged: (String text) {
+                    setState(() {
+                      _server = text;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: _server,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                actions: <Widget>[
+                  Builder(
+                      builder: (context) => TextButton(
+                          child: const Text('CONNECT'),
+                          onPressed: () {
+                            _prefs.setString('server', _server);
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (BuildContext context) =>
+                                        CallSample(host: _server)));
+                          }))
+                ])));
+  }
 }
 
 enum DialogDemoAction {
