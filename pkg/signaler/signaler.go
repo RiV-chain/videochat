@@ -63,6 +63,7 @@ type PeerInfo struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	UserAgent string `json:"user_agent"`
+	Address   string `json:"address"`
 }
 
 type Negotiation struct {
@@ -218,6 +219,7 @@ func (s *Signaler) HandleNewWebSocket(conn *websocket.WebSocketConn, request *ht
 				logger.Errorf("Unmarshal login error %v", err)
 				return
 			}
+			info.Address = conn.GetRemoteAddress()
 			s.peers[info.ID] = Peer{
 				conn: conn,
 				info: info,
@@ -326,11 +328,11 @@ func (s *Signaler) HandleNewWebSocket(conn *websocket.WebSocketConn, request *ht
 			}
 		}
 
-		logger.Infof("Remove peer %s", peerID)
 		if peerID == "" {
 			logger.Infof("Leve peer id not found")
 			return
 		}
+		logger.Infof("Remove peer %s", peerID)
 		delete(s.peers, peerID)
 
 		s.NotifyPeersUpdate(conn, s.peers)

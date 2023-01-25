@@ -35,6 +35,10 @@ func NewWebSocketConn(socket *websocket.Conn) *WebSocketConn {
 	return &conn
 }
 
+func (conn *WebSocketConn) GetRemoteAddress() string {
+	return conn.socket.RemoteAddr().String()
+}
+
 func (conn *WebSocketConn) ReadMessage() {
 	in := make(chan []byte)
 	stop := make(chan struct{})
@@ -63,7 +67,7 @@ func (conn *WebSocketConn) ReadMessage() {
 	for {
 		select {
 		case _ = <-pingTicker.C:
-			logger.Infof("Send keepalive !!!")
+			//logger.Infof("Send keepalive !!!")
 			if err := conn.Send("{}"); err != nil {
 				logger.Errorf("Keepalive has failed")
 				pingTicker.Stop()
@@ -71,7 +75,7 @@ func (conn *WebSocketConn) ReadMessage() {
 			}
 		case message := <-in:
 			{
-				logger.Infof("Recivied data: %s", message)
+				logger.Infof("Received data: %s", message)
 				conn.Emit("message", []byte(message))
 			}
 		case <-stop:
@@ -84,7 +88,9 @@ func (conn *WebSocketConn) ReadMessage() {
 * Send |message| to the connection.
  */
 func (conn *WebSocketConn) Send(message string) error {
-	logger.Infof("Send data: %s", message)
+	if message != "{}" {
+		logger.Infof("Send data: %s", message)
+	}
 	conn.mutex.Lock()
 	defer conn.mutex.Unlock()
 	if conn.closed {
