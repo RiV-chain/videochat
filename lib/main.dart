@@ -19,12 +19,14 @@ class _MyAppState2 extends State<MyApp> {
   late SharedPreferences _prefs;
 
   @override
-  initState() async {
+  initState() {
     super.initState();
-    _prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _server = _prefs.getString('server') ?? 'sl.rivchain.org';
-    });
+    () async {
+      _prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _server = _prefs.getString('server') ?? 'sl.rivchain.org';
+      });
+    }();
   }
 
   @override
