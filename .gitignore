@@ -26,6 +26,8 @@
 .pub-cache/
 .pub/
 /build/
+**/flutter/generated*
+**/Flutter/Generated*
 
 # Android related
 **/android/**/gradle-wrapper.jar

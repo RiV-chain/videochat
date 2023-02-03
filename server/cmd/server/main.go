@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/flutter-webrtc/flutter-webrtc-server/pkg/logger"
 	"github.com/flutter-webrtc/flutter-webrtc-server/pkg/signaler"
@@ -12,7 +13,7 @@ import (
 
 func main() {
 
-	cfg, err := ini.Load("configs/config.ini")
+	cfg, err := ini.Load(filepath.Join("configs", "config.ini"))
 	if err != nil {
 		logger.Errorf("Fail to read file: %v", err)
 		os.Exit(1)
