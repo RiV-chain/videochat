@@ -110,6 +110,27 @@ type ContactsResponse struct {
 	Peers   []string `json:"peers"`
 }
 
+func getSelfNode() (n Node, err error) {
+	response, err := http.Get(meshep + "/api/self")
+	if err != nil {
+		return
+	}
+	if response.StatusCode != 200 {
+		err = errors.New(response.Status)
+		return
+	}
+	type Self struct {
+		Key string `json:"key"`
+	}
+
+	s := Self{}
+	if err = json.NewDecoder(response.Body).Decode(&s); err != nil {
+		return
+	}
+	n, err = getRemoteNodeinfo(s.Key)
+	return
+}
+
 func getRemoteNodeinfo(key string) (n Node, err error) {
 	type Nodes map[string]Node
 	response, err := http.Get(meshep + "/api/remote/nodeinfo/" + key)
@@ -195,12 +216,20 @@ func (server *WebSocketServer) handleContactsRequest(w http.ResponseWriter, r *h
 			return
 		}
 
+		match := func(node Node) bool {
+			return strings.Contains(node.Email, rbody.Query) || strings.Contains(node.Name, rbody.Query)
+		}
 		var resp = ContactsResponse{[]Node{}, []string{}}
 		if node, err := getRemoteNodeinfo(rbody.Query); err == nil { //Query by Key
 			resp.Matches = append(resp.Matches, node)
 			//TBD
 			//} else if net.ParseIP(rbody.Query) == nil { //query by IP
 		} else if len(rbody.Peers) == 0 {
+			if node, err := getSelfNode(); err == nil {
+				if match(node) {
+					resp.Matches = append(resp.Matches, node)
+				}
+			}
 			peers, err := getPeers()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -210,7 +239,8 @@ func (server *WebSocketServer) handleContactsRequest(w http.ResponseWriter, r *h
 		}
 		for _, p := range rbody.Peers {
 			if node, err := getRemoteNodeinfo(p); err == nil {
-				if strings.Contains(node.Email, rbody.Query) || strings.Contains(node.Name, rbody.Query) {
+
+				if match(node) {
 					resp.Matches = append(resp.Matches, node)
 				}
 				if peers, err := getRemotePeers(p); err == nil {

@@ -73,18 +73,11 @@ class _CallSampleState extends State<CallSample> {
           });
           break;
         case CallState.CallStateRinging:
-          VideoSource? accept = await _showAcceptDialog();
-          if (accept != null) {
-            _accept();
-            //TODO Do not open camera first
-            if (accept == VideoSource.Screen) {
-              await switchToScreenSharing(context);
-            }
+          session.videoSource = await _showAcceptDialog();
+          if (session.videoSource != null) {
             setState(() {
               _inCalling = true;
             });
-          } else {
-            _reject();
           }
           break;
         case CallState.CallStateBye:
@@ -146,8 +139,8 @@ class _CallSampleState extends State<CallSample> {
       builder: (context) {
         return AlertDialog(
           title: Text("Incoming call"),
-          content:
-              Text(_session!.pid + " invites to a video meeting. Accept it?"),
+          content: Text(
+              "${_session!.pid} invites to a video meeting. He offers his ${_session!.videoSource} source. Accept it?"),
           actions: <Widget>[
             MaterialButton(
               child: Text(
@@ -169,6 +162,13 @@ class _CallSampleState extends State<CallSample> {
                 style: TextStyle(color: Colors.green),
               ),
               onPressed: () => Navigator.of(context).pop(VideoSource.Screen),
+            ),
+            MaterialButton(
+              child: Text(
+                'Audio',
+                style: TextStyle(color: Colors.green),
+              ),
+              onPressed: () => Navigator.of(context).pop(VideoSource.AudioOnly),
             ),
           ],
         );
@@ -199,21 +199,10 @@ class _CallSampleState extends State<CallSample> {
     );
   }
 
-  _invitePeer(BuildContext context, String peerId, bool useScreen) async {
+  _invitePeer(
+      BuildContext context, String peerId, VideoSource videoSource) async {
     if (_signaling != null && peerId != _selfId) {
-      _signaling?.invite(peerId, 'video', useScreen);
-    }
-  }
-
-  _accept() {
-    if (_session != null) {
-      _signaling?.accept(_session!.sid);
-    }
-  }
-
-  _reject() {
-    if (_session != null) {
-      _signaling?.reject(_session!.sid);
+      _signaling?.invite(peerId, 'video', videoSource);
     }
   }
 
@@ -264,7 +253,7 @@ class _CallSampleState extends State<CallSample> {
 
   Future<void> switchToScreenSharing(BuildContext context) async {
     MediaStream? screenStream = await selectScreenSourceDialog(context);
-    if (screenStream != null) _signaling?.switchToScreenSharing(screenStream);
+    if (screenStream != null) _signaling?.switchScreenSharing(screenStream);
   }
 
   _muteMic() {
@@ -278,8 +267,9 @@ class _CallSampleState extends State<CallSample> {
       if (_session == null) {
         print('Stats stop');
         timer.cancel();
+      } else {
+        _stats.updateStatsReport(await _session!.pc!.getStats());
       }
-      _stats.updateStatsReport(await _session!.pc!.getStats());
       setState(() {});
     });
   }
@@ -293,22 +283,31 @@ class _CallSampleState extends State<CallSample> {
             : peer['name'] + ', ID: ${peer['id']} [${peer['address']}]'),
         onTap: null,
         trailing: SizedBox(
-            width: 100.0,
+            width: 120.0,
             child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   IconButton(
                     icon: Icon(self ? Icons.close : Icons.videocam,
                         color: self ? Colors.grey : Colors.black),
-                    onPressed: () => _invitePeer(context, peer['id'], false),
+                    onPressed: () =>
+                        _invitePeer(context, peer['id'], VideoSource.Camera),
                     tooltip: 'Video calling',
                   ),
                   IconButton(
                     icon: Icon(self ? Icons.close : Icons.screen_share,
                         color: self ? Colors.grey : Colors.black),
-                    onPressed: () => _invitePeer(context, peer['id'], true),
+                    onPressed: () =>
+                        _invitePeer(context, peer['id'], VideoSource.Screen),
                     tooltip: 'Screen sharing',
-                  )
+                  ),
+                  IconButton(
+                    icon: Icon(self ? Icons.close : Icons.headphones,
+                        color: self ? Colors.grey : Colors.black),
+                    onPressed: () =>
+                        _invitePeer(context, peer['id'], VideoSource.AudioOnly),
+                    tooltip: 'Audio calling',
+                  ),
                 ])),
         subtitle: Text('[' + peer['user_agent'] + ']'),
       ),

@@ -115,7 +115,7 @@ class _DataChannelSampleState extends State<DataChannelSample> {
 
   _invitePeer(context, peerId) async {
     if (peerId != _selfId) {
-      _signaling?.invite(peerId, 'data', false);
+      _signaling?.invite(peerId, 'data', VideoSource.Camera);
     }
   }
 

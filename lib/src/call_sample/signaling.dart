@@ -26,15 +26,13 @@ enum CallState {
   CallStateBye,
 }
 
-enum VideoSource {
-  Camera,
-  Screen,
-}
+enum VideoSource { Camera, Screen, AudioOnly }
 
 class Session {
-  Session({required this.sid, required this.pid});
+  Session({required this.sid, required this.pid, this.videoSource});
   String pid;
   String sid;
+  VideoSource? videoSource;
   RTCPeerConnection? pc;
   RTCDataChannel? dc;
   List<RTCIceCandidate> remoteCandidates = [];
@@ -59,7 +57,7 @@ class Signaling {
 
   Function(SignalingState state)? onSignalingStateChange;
   Function(Session session, CallState state)? onCallStateChange;
-  Function(MediaStream stream)? onLocalStream;
+  Function(MediaStream? stream)? onLocalStream;
   Function(Session session, MediaStream stream)? onAddRemoteStream;
   Function(Session session, MediaStream stream)? onRemoveRemoteStream;
   Function(dynamic event)? onPeersUpdate;
@@ -68,7 +66,7 @@ class Signaling {
   Function(Session session, RTCDataChannel dc)? onDataChannel;
 
   String get sdpSemantics => 'unified-plan';
-
+/*
   Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'url': 'stun:stun.l.google.com:19302'},
@@ -82,6 +80,7 @@ class Signaling {
       */
     ]
   };
+*/
 
   final Map<String, dynamic> _config = {
     'mandatory': {},
@@ -119,7 +118,7 @@ class Signaling {
     }
   }
 
-  void switchToScreenSharing(MediaStream stream) {
+  void switchScreenSharing(MediaStream stream) {
     if (_localStream != null && _videoSource != VideoSource.Screen) {
       _senders.forEach((sender) {
         if (sender.track!.kind == 'video') {
@@ -131,6 +130,18 @@ class Signaling {
     }
   }
 
+  void switchAudio() {
+    if (_localStream != null) {
+      _senders.forEach((sender) {
+        if (sender.track!.kind == 'video') {
+          sender.replaceTrack(null);
+        }
+      });
+      onLocalStream?.call(_localStream!);
+      _videoSource = VideoSource.AudioOnly;
+    }
+  }
+
   void muteMic(bool isMute) {
     if (_localStream != null) {
 //      bool enabled = _localStream!.getAudioTracks()[0].enabled;
@@ -138,13 +149,16 @@ class Signaling {
     }
   }
 
-  void invite(String peerId, String media, bool useScreen) async {
+  void invite(String peerId, String media, VideoSource videoSource) async {
     var sessionId = _selfId + '-' + peerId;
-    Session session = await _createSession(null,
-        peerId: peerId,
-        sessionId: sessionId,
-        media: media,
-        screenSharing: useScreen);
+    Session session = await _createSession(
+      null,
+      peerId: peerId,
+      sessionId: sessionId,
+      media: media,
+      videoSource: videoSource,
+    );
+    await _createLocalStream(session);
     _sessions[sessionId] = session;
     if (media == 'data') {
       _createDataChannel(session);
@@ -203,12 +217,20 @@ class Signaling {
           var description = data['description'];
           var media = data['media'];
           var sessionId = data['session_id'];
+          VideoSource offeredVideoSource;
+          try {
+            offeredVideoSource =
+                VideoSource.values.byName(data['video_source']);
+          } catch (e) {
+            offeredVideoSource = VideoSource.AudioOnly;
+            print(e);
+          }
           var session = _sessions[sessionId];
           var newSession = await _createSession(session,
               peerId: peerId,
               sessionId: sessionId,
               media: media,
-              screenSharing: false);
+              videoSource: offeredVideoSource);
           _sessions[sessionId] = newSession;
           await newSession.pc?.setRemoteDescription(
               RTCSessionDescription(description['sdp'], description['type']));
@@ -221,7 +243,13 @@ class Signaling {
             newSession.remoteCandidates.clear();
           }
           onCallStateChange?.call(newSession, CallState.CallStateNew);
-          onCallStateChange?.call(newSession, CallState.CallStateRinging);
+          await onCallStateChange?.call(newSession, CallState.CallStateRinging);
+          if (newSession.videoSource != null) {
+            await _createLocalStream(newSession);
+            accept(newSession.sid);
+          } else {
+            reject(newSession.sid);
+          }
         }
         break;
       case 'answer':
@@ -298,6 +326,7 @@ class Signaling {
             "uris": ["turn:127.0.0.1:19302?transport=udp"]
           }
         */
+        /*
         _iceServers = {
           'iceServers': [
             {
@@ -307,6 +336,7 @@ class Signaling {
             },
           ]
         };
+        */
       } catch (e) {}
     }
 
@@ -333,47 +363,61 @@ class Signaling {
     await _socket?.connect();
   }
 
-  Future<MediaStream> createStream(String media, bool userScreen,
+  Future<MediaStream?> createStream(VideoSource videoSource,
       {BuildContext? context}) async {
-    final Map<String, dynamic> mediaConstraints = {
-      'audio': userScreen ? false : true,
-      'video': userScreen
-          ? true
-          : {
-              'mandatory': {
-                'minWidth':
-                    '640', // Provide your own width, height and frame rate here
-                'minHeight': '480',
-                'minFrameRate': '30',
-              },
-              'facingMode': 'user',
-              'optional': [],
-            }
-    };
-    late MediaStream stream;
-    if (userScreen) {
-      if (WebRTC.platformIsDesktop) {
-        final source = await showDialog<DesktopCapturerSource>(
-          context: context!,
-          builder: (context) => ScreenSelectDialog(),
-        );
-        stream = await navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
-          'video': source == null
-              ? true
-              : {
-                  'deviceId': {'exact': source.id},
-                  'mandatory': {'frameRate': 30.0}
-                }
-        });
-      } else {
-        stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+    MediaStream? stream;
+    try {
+      switch (videoSource) {
+        case VideoSource.Screen:
+          if (WebRTC.platformIsDesktop) {
+            final source = await showDialog<DesktopCapturerSource>(
+              context: context!,
+              builder: (context) => ScreenSelectDialog(),
+            );
+            stream =
+                await navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
+              'video': source == null
+                  ? true
+                  : {
+                      'deviceId': {'exact': source.id},
+                      'mandatory': {'frameRate': 30.0}
+                    }
+            });
+          } else {
+            stream = await navigator.mediaDevices
+                .getDisplayMedia({'video': true, 'audio': false});
+          }
+          break;
+        case VideoSource.Camera:
+          stream = await navigator.mediaDevices
+              .getUserMedia({'video': true, 'audio': true});
+          break;
+        case VideoSource.AudioOnly:
+          stream = await navigator.mediaDevices
+              .getUserMedia({'video': false, 'audio': true});
+          break;
       }
-    } else {
-      stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    } catch (e) {
+      print("Get media error: " + e.toString());
     }
-
     onLocalStream?.call(stream);
     return stream;
+  }
+
+  _createLocalStream(Session session) async {
+    _localStream = await createStream(session.videoSource!, context: _context);
+    if (_localStream != null) {
+      switch (sdpSemantics) {
+        case 'plan-b':
+          await session.pc!.addStream(_localStream!);
+          break;
+        case 'unified-plan':
+          _localStream!.getTracks().forEach((track) async {
+            _senders.add(await session.pc!.addTrack(track, _localStream!));
+          });
+          break;
+      }
+    }
   }
 
   Future<Session> _createSession(
@@ -381,13 +425,11 @@ class Signaling {
     required String peerId,
     required String sessionId,
     required String media,
-    required bool screenSharing,
+    required VideoSource videoSource,
   }) async {
-    var newSession = session ?? Session(sid: sessionId, pid: peerId);
-    if (media != 'data')
-      _localStream =
-          await createStream(media, screenSharing, context: _context);
-    print(_iceServers);
+    var newSession = session ??
+        Session(sid: sessionId, pid: peerId, videoSource: videoSource);
+//    print(_iceServers);
     RTCPeerConnection pc = await createPeerConnection({
 //      ..._iceServers,
       ...{'sdpSemantics': sdpSemantics}
@@ -399,7 +441,6 @@ class Signaling {
             onAddRemoteStream?.call(newSession, stream);
             _remoteStreams.add(stream);
           };
-          await pc.addStream(_localStream!);
           break;
         case 'unified-plan':
           // Unified-Plan
@@ -408,9 +449,6 @@ class Signaling {
               onAddRemoteStream?.call(newSession, event.streams[0]);
             }
           };
-          _localStream!.getTracks().forEach((track) async {
-            _senders.add(await pc.addTrack(track, _localStream!));
-          });
           break;
       }
 
@@ -526,6 +564,7 @@ class Signaling {
         'description': {'sdp': s.sdp, 'type': s.type},
         'session_id': session.sid,
         'media': media,
+        'video_source': session.videoSource!.name
       });
     } catch (e) {
       print(e.toString());
