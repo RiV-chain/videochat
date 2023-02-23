@@ -3,4 +3,9 @@ run-windows:
 
 build-web:
 	flutter build web --web-renderer html --release
-	
+
+run-svr:
+	cd signalsvr && dart run bin/signalsvr.dart
+
+run-ui:
+	flutter run -d chrome

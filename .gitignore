@@ -73,6 +73,6 @@
 .flutter-plugins-dependencies
 
 ios/Flutter/flutter_export_environment.sh
-server/configs/certs/cert.pem
-server/configs/certs/key.pem
+configs/certs/cert.pem
+configs/certs/key.pem
 pubspec.lock

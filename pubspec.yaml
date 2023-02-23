@@ -1,4 +1,4 @@
-name: flutter_webrtc_demo
+name: coriv
 description: A new Flutter application.
 version: 1.2.0
 
@@ -11,10 +11,17 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.3
-  flutter_webrtc: ^0.9.11
+  flutter_webrtc: ^0.9.23
   shared_preferences: ^2.0.7
   http: ^0.13.3
   path_provider: ^2.0.2
+  logging: ^1.1.1
+  convert: ^3.1.1
+  shelf: ^1.4.0
+  shelf_router: ^1.1.3
+  ini: ^2.1.0
+  shelf_web_socket: ^1.0.3
+  shelf_static: ^1.1.1
 
 dev_dependencies:
   flutter_test:

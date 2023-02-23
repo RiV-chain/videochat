@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
-project(flutter_webrtc_demo LANGUAGES CXX)
+project(coriv LANGUAGES CXX)
 
-set(BINARY_NAME "flutter_webrtc_demo")
+set(BINARY_NAME "coriv")
 
 cmake_policy(SET CMP0063 NEW)
 

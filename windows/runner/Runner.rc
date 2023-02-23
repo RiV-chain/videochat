@@ -92,10 +92,10 @@ BEGIN
             VALUE "CompanyName", "com.cloudwebrtc" "\0"
             VALUE "FileDescription", "A new Flutter project." "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "flutter_webrtc_demo" "\0"
+            VALUE "InternalName", "coriv" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2021 com.cloudwebrtc. All rights reserved." "\0"
-            VALUE "OriginalFilename", "flutter_webrtc_demo.exe" "\0"
-            VALUE "ProductName", "flutter_webrtc_demo" "\0"
+            VALUE "OriginalFilename", "coriv.exe" "\0"
+            VALUE "ProductName", "coriv" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
