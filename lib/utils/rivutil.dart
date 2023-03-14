@@ -162,8 +162,8 @@ class RivApiClient {
       Future<void> Function(List<String> peers, String query) onPeers) async {
     var query = req['query'];
     Future<bool> match(Node node) async {
-      var filterMatch = (node.email != null && node.email!.contains(query)) ||
-          (node.name != null && node.name!.contains(query));
+      var filterMatch = (node.email ?? "").contains(query) ||
+          (node.name ?? "").contains(query);
       return filterMatch;
     }
 

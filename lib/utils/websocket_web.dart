@@ -1,7 +1,10 @@
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html';
 
+import 'package:logging/logging.dart';
+
 class SimpleWebSocket {
+  static final log = Logger('SimpleWebSocket');
   String _url;
   var _socket;
   Function()? onOpen;
@@ -9,7 +12,7 @@ class SimpleWebSocket {
   Function(int code, String reason)? onClose;
 
   SimpleWebSocket(this._url) {
-    _url = _url.replaceAll('https:', 'wss:');
+    _url = _url.replaceAll('https:', 'wss:') + "/ws";
   }
 
   connect() async {
@@ -20,7 +23,7 @@ class SimpleWebSocket {
       });
 
       _socket.onMessage.listen((e) {
-        print('recv: ${e.data}');
+        //log.finer('recv: ${e.data}');
         onMessage?.call(e.data);
       });
 
@@ -35,9 +38,9 @@ class SimpleWebSocket {
   send(data) {
     if (_socket != null && _socket.readyState == WebSocket.OPEN) {
       _socket.send(data);
-      print('send: $data');
+      //log.finer('send: $data');
     } else {
-      print('WebSocket not connected, message $data not sent');
+      log.severe('WebSocket not connected, message $data not sent');
     }
   }
 

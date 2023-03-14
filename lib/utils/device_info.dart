@@ -14,10 +14,10 @@ class DeviceInfo {
   }
 
   static String get domain {
-    return "hostname";
+    return "localhost";
   }
 
   static String get signalingLocation {
-    return "https://${Platform.localHostname}:8086/ws";
+    return "https://${Platform.localHostname}:8086";
   }
 }

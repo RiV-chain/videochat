@@ -29,3 +29,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - configs/certs/cert.pem
+    - configs/certs/key.pem
+    

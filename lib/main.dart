@@ -5,6 +5,7 @@ import 'package:coriv/call_sample/call_sample.dart';
 import 'package:coriv/types.dart';
 import 'package:coriv/common.dart';
 import 'package:coriv/call_sample/signaling.dart';
+import 'package:logging/logging.dart';
 
 void main() => runApp(new MyApp());
 
@@ -21,12 +22,17 @@ enum DialogDemoAction {
 class _MyAppState extends State<MyApp> {
   List<Node> items = [];
   Set peerKeys = {};
-  String itemsQuery = 'rivchain.org';
+  String itemsQuery = '';
   bool _allowFindPeers = false;
 
   @override
   initState() {
     super.initState();
+    Logger.root.level = Level.ALL; // defaults to Level.INFO
+    Logger.root.onRecord.listen((record) {
+      print(
+          '${record.time}: ${record.level.name}: ${record.loggerName}: ${record.message}');
+    });
 
     signaling.connect();
     signaling.onSignalingStateChange = (SignalingState state) async {
@@ -40,6 +46,28 @@ class _MyAppState extends State<MyApp> {
           break;
       }
     };
+    signaling.createStream = SessionUi.createStream;
+    signaling.showAcceptDialog = SessionUi.showAcceptDialog;
+    signaling.onCallStateChange = _onCallStateChange;
+  }
+
+  _onCallStateChange(Session session, CallState state) async {
+    if (state == CallState.CallStateRinging) {
+//      if (session.videoSource != null) {
+      _enterRoot(SessionUi.context, signaling.riv.selfNode, session);
+//      }
+    }
+  }
+
+  _enterRoot(context, Node item, [Session? session]) async {
+    _allowFindPeers = false;
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (BuildContext context) =>
+                CallSample(hostNode: item, session: session)));
+    SessionUi.context = context;
+    signaling.onCallStateChange = _onCallStateChange;
   }
 
   _buildRow(context, Node item) {
@@ -49,19 +77,11 @@ class _MyAppState extends State<MyApp> {
           backgroundImage:
               item.avatar != null ? NetworkImage(item.avatar!) : null,
           backgroundColor: Colors.brown.shade800,
-          child: Text((item.name ?? item.address).substring(0, 2)),
+          child: Text((item.label).substring(0, 2)),
         ),
-        title: Text(
-            '${item.name ?? item.address}${isSelfNode(item) ? " [This node]" : ""}'),
+        title: Text('${item.label}${isSelfNode(item) ? " [This node]" : ""}'),
         subtitle: Text('Key: ${item.key}'),
-        onTap: () {
-          _allowFindPeers = false;
-          Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (BuildContext context) =>
-                      CallSample(hostNode: item)));
-        },
+        onTap: () => _enterRoot(context, item),
         trailing: Icon(Icons.arrow_right),
       ),
       Divider()
@@ -75,6 +95,7 @@ class _MyAppState extends State<MyApp> {
           appBar: AppBar(title: Text('Video chat')),
           body: LayoutBuilder(builder:
               (BuildContext context, BoxConstraints viewportConstraints) {
+            SessionUi.context = context;
             return SingleChildScrollView(
                 child: ConstrainedBox(
                     constraints: BoxConstraints(
@@ -90,8 +111,8 @@ class _MyAppState extends State<MyApp> {
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 15.0),
                             child: TextField(
-                              controller:
-                                  TextEditingController(text: itemsQuery),
+                              // controller:
+                              //     TextEditingController(text: itemsQuery),
                               onChanged: (value) {
                                 setState(() {
                                   itemsQuery = value;
@@ -119,20 +140,22 @@ class _MyAppState extends State<MyApp> {
   }
 
   fetchItems(String query, [List apeers = const []]) async {
-    // apeers = [
-    //   '25be80af538c1673028ff3f1099464b4d6a060a96c7ef096acbbd971af14848f',
-    //   '112e5229a0a4ee3afebbcc0e92655f63cf8b54906340bbd74beed965bd36b463'
-    // ];
     if (!_allowFindPeers) return;
+    if (items.isEmpty) {
+      items.add(signaling.riv.selfNode);
+      setState(() {});
+    }
     if (itemsQuery == query) {
+      var fpeers = [];
       try {
         await signaling.riv.findPeers({
           'query': query,
           'peers': apeers,
         }, (node) async {
           if (!_allowFindPeers) throw Break();
-          if (!peerKeys.contains(node.key)) {
-            peerKeys.add(node.key);
+          if (items.where((n) {
+            return node.key == n.key;
+          }).isEmpty) {
             if (await signaling.pingPeer(node.address)) {
               items.add(node);
               setState(() {});
@@ -140,13 +163,14 @@ class _MyAppState extends State<MyApp> {
           }
         }, (peers, query) async {
           if (!_allowFindPeers) throw Break();
-          var fpeers = peers.where((peer) => !peerKeys.contains(peer)).toList();
-          if (fpeers.isNotEmpty) {
-            await fetchItems(query, fpeers);
-          }
+          fpeers.addAll(peers.where((peer) => !peerKeys.contains(peer)));
+          peerKeys.addAll(fpeers);
         });
       } on Break {
         return;
+      }
+      if (fpeers.isNotEmpty) {
+        await fetchItems(query, fpeers);
       }
     }
   }

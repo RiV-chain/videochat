@@ -3,10 +3,10 @@ import 'dart:core';
 class Node {
   Node({
     required this.key,
-    required this.name,
-    required this.email,
+    this.name,
+    this.email,
     required this.address,
-    required this.avatar,
+    this.avatar,
   });
 
   String key;
@@ -15,6 +15,8 @@ class Node {
   String address;
   String? avatar;
 
+  String get label => name ?? address;
+
   Map<String, dynamic> toJson() => {
         "name": name,
         "email": email,
@@ -22,6 +24,16 @@ class Node {
         "key": key,
         "avatar": avatar,
       };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Node &&
+          runtimeType == other.runtimeType &&
+          address == other.address;
+
+  @override
+  int get hashCode => address.hashCode;
 
   factory Node.fromJson(Map<String, dynamic> json) {
     return Node(

@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../relay.dart';
 import 'package:logging/logging.dart';
@@ -6,6 +10,51 @@ import 'package:logging/logging.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
+
+Future<String> _getSelfAddr() async {
+  final response = await http.get(Uri.parse("http://localhost:19019/api/self"));
+  if (response.statusCode != 200) {
+    Logger("").severe('GET /api/self failed: ${response.reasonPhrase}');
+    return 'localhost';
+  }
+  final Map<String, dynamic> self = json.decode(response.body);
+  return "[" + self["address"] + "]";
+}
+
+class SimpleWebSocket {
+  String uri;
+  Function()? onOpen;
+  Function(dynamic msg)? onMessage;
+  Function(int? code, String? reason)? onClose;
+  SimpleWebSocket(this.uri);
+
+  connect() async {
+    uri = "https://" + await _getSelfAddr() + ":8086";
+    await _runSvr(uri);
+    _svr!.signaler.uiConn = Connection(send: (data) {
+      try {
+        _Service.log.finest('recv: $data');
+        onMessage?.call(data);
+      } catch (e) {
+        onClose?.call(500, e.toString());
+      }
+    });
+    try {
+      onOpen?.call();
+    } catch (e) {
+      onClose?.call(500, e.toString());
+    }
+  }
+
+  send(data) {
+    _Service.log.finest('send: $data');
+    _svr!.signaler.onMessageHandler(data);
+  }
+
+  close() {
+    _svr!.signaler.uiConn = null;
+  }
+}
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -18,47 +67,22 @@ class MyHttpOverrides extends HttpOverrides {
 
 _runSvr(String uri) async {
   if (_svr == null) {
-    var context = SecurityContext()
-      ..useCertificateChain('configs/certs/cert.pem')
-      ..usePrivateKey('configs/certs/key.pem');
+    HttpOverrides.global = MyHttpOverrides();
+    final SecurityContext context = SecurityContext.defaultContext;
+
+    final ByteData certificateChainBytes =
+        await rootBundle.load('configs/certs/cert.pem');
+    context
+        .useCertificateChainBytes(certificateChainBytes.buffer.asUint8List());
+
+    final ByteData keyBytes = await rootBundle.load('configs/certs/key.pem');
+    context.usePrivateKeyBytes(keyBytes.buffer.asUint8List());
     _svr = _Service(
         domain: Uri.parse(uri).host,
         port: Uri.parse(uri).port,
         securityContext: context);
     await _svr!.serve();
     _Service.log.info('Server running on $uri');
-  }
-}
-
-class SimpleWebSocket {
-  Function()? onOpen;
-  Function(dynamic msg)? onMessage;
-  Function(int? code, String? reason)? onClose;
-  SimpleWebSocket(String uri) {
-    _runSvr(uri);
-    _svr!.signaler.uiConn = Connection(send: (data) {
-      try {
-        onMessage?.call(data);
-      } catch (e) {
-        onClose?.call(500, e.toString());
-      }
-    });
-  }
-
-  connect() async {
-    try {
-      onOpen?.call();
-    } catch (e) {
-      onClose?.call(500, e.toString());
-    }
-  }
-
-  send(data) {
-    _svr!.signaler.onMessageHandler(data);
-  }
-
-  close() {
-    _svr!.signaler.uiConn = null;
   }
 }
 
@@ -72,7 +96,6 @@ class _Service {
   final String domain;
   final int port;
   final SecurityContext securityContext;
-  Connection? uiConn;
   Signaler signaler;
   static final log = Logger('Signaler');
 
@@ -80,9 +103,7 @@ class _Service {
     final router = Router();
 
     router.post("/inbox", (Request request) async {
-      if (uiConn != null) {
-        uiConn!.send(await request.readAsString());
-      }
+      signaler.uiConn?.send(await request.readAsString());
       return Response(204);
     });
 
