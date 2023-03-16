@@ -34,21 +34,23 @@ class _MyAppState extends State<MyApp> {
           '${record.time}: ${record.level.name}: ${record.loggerName}: ${record.message}');
     });
 
-    signaling.connect();
-    signaling.onSignalingStateChange = (SignalingState state) async {
-      switch (state) {
-        case SignalingState.ConnectionClosed:
-        case SignalingState.ConnectionError:
-          break;
-        case SignalingState.ConnectionOpen:
-          _allowFindPeers = true;
-          fetchItems(itemsQuery);
-          break;
-      }
-    };
-    signaling.createStream = SessionUi.createStream;
-    signaling.showAcceptDialog = SessionUi.showAcceptDialog;
-    signaling.onCallStateChange = _onCallStateChange;
+    () async {
+      await signaling.connect();
+      signaling.onSignalingStateChange = (SignalingState state) async {
+        switch (state) {
+          case SignalingState.ConnectionClosed:
+          case SignalingState.ConnectionError:
+            break;
+          case SignalingState.ConnectionOpen:
+            _allowFindPeers = true;
+            fetchItems(itemsQuery);
+            break;
+        }
+      };
+      signaling.createStream = SessionUi.createStream;
+      signaling.showAcceptDialog = SessionUi.showAcceptDialog;
+      signaling.onCallStateChange = _onCallStateChange;
+    }();
   }
 
   _onCallStateChange(Session session, CallState state) async {

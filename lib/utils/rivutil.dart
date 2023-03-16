@@ -141,12 +141,13 @@ String? addrForKey(String key) {
 }
 
 class RivApiClient {
-  final String endpoint;
+  String? endpoint;
   final Signaling signaling;
   Node? _selfNode;
-  RivApiClient({required this.endpoint, required this.signaling});
+  RivApiClient({required this.signaling});
 
-  connect() async {
+  connect(String endpoint) async {
+    this.endpoint = endpoint;
     while (_selfNode == null) {
       _selfNode = await _getSelfNode();
     }

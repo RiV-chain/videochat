@@ -11,6 +11,7 @@ import '../utils/websocket_loop.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
 import '../utils/rivutil.dart';
 import '../types.dart';
+import '../defaults.dart';
 
 enum SignalingState {
   ConnectionOpen,
@@ -73,8 +74,7 @@ class Signaling {
 
   String? _host;
   Signaling() {
-    riv = RivApiClient(
-        endpoint: "http://${DeviceInfo.domain}:19019", signaling: this);
+    riv = RivApiClient(signaling: this);
   }
   List<dynamic> _peers = [];
   int lastEventId = 0;
@@ -280,6 +280,11 @@ class Signaling {
     }
   }
 
+  Future<Map<String, dynamic>> config() async {
+    var r = _makePendingResponse(null, 'config', <String, dynamic>{});
+    return r.future;
+  }
+
   Future<http.Response> httpGet(String address,
       {Map<String, String>? headers}) async {
     var r = await _makePendingResponse(null, 'httpget', {
@@ -461,14 +466,15 @@ class Signaling {
   }
 
   Future<void> connect() async {
-    var url = DeviceInfo.signalingLocation;
+    var url = "https://${DeviceInfo.domain}:${Defaults.signallingPort}";
     _socket = SimpleWebSocket(url);
 
     log.info('connect to $url');
 
     _socket?.onOpen = () async {
+      var cfg = await config();
 //      print('onOpen');
-      await riv.connect();
+      await riv.connect(cfg['mesh']);
       onSignalingStateChange?.call(SignalingState.ConnectionOpen);
       if (_peers.isEmpty) {
         _peers.add({

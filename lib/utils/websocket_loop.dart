@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../relay.dart';
+import '../defaults.dart';
 import 'package:logging/logging.dart';
 
 import 'package:shelf/shelf.dart';
@@ -12,7 +13,8 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
 Future<String> _getSelfAddr() async {
-  final response = await http.get(Uri.parse("http://localhost:19019/api/self"));
+  final response =
+      await http.get(Uri.parse("${Defaults.meshEndpoint}/api/self"));
   if (response.statusCode != 200) {
     Logger("").severe('GET /api/self failed: ${response.reasonPhrase}');
     return 'localhost';
@@ -29,7 +31,7 @@ class SimpleWebSocket {
   SimpleWebSocket(this.uri);
 
   connect() async {
-    uri = "https://" + await _getSelfAddr() + ":8086";
+    uri = "https://" + await _getSelfAddr() + ":${Defaults.signallingPort}";
     await _runSvr(uri);
     _svr!.signaler.uiConn = Connection(send: (data) {
       try {
@@ -71,11 +73,11 @@ _runSvr(String uri) async {
     final SecurityContext context = SecurityContext.defaultContext;
 
     final ByteData certificateChainBytes =
-        await rootBundle.load('configs/certs/cert.pem');
+        await rootBundle.load(Defaults.tlsCertFn);
     context
         .useCertificateChainBytes(certificateChainBytes.buffer.asUint8List());
 
-    final ByteData keyBytes = await rootBundle.load('configs/certs/key.pem');
+    final ByteData keyBytes = await rootBundle.load(Defaults.tlsKeyFn);
     context.usePrivateKeyBytes(keyBytes.buffer.asUint8List());
     _svr = _Service(
         domain: Uri.parse(uri).host,
@@ -91,7 +93,8 @@ class _Service {
     required this.domain,
     required this.port,
     required this.securityContext,
-  }) : signaler = Signaler(domain: domain, port: port);
+  }) : signaler =
+            Signaler(domain: domain, port: port, mesh: Defaults.meshEndpoint);
 
   final String domain;
   final int port;

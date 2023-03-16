@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:async' show Future;
 import 'package:coriv/relay.dart';
 import 'package:logging/logging.dart';
 import "package:ini/ini.dart";
+import "package:coriv/defaults.dart";
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -10,6 +12,7 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shelf_static/shelf_static.dart' as shelf_static;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:http/http.dart' as http;
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -33,10 +36,22 @@ void main(List<String> arguments) async {
     configFn = arguments[0];
   }
   Config config = Config.fromStrings(File(configFn).readAsLinesSync());
-  String domain = config.get("general", "domain") ?? 'localhost';
-  int port = int.parse(config.get("general", "port") ?? '8086');
-  var chain = config.get("general", "cert") ?? 'cert.pem';
-  var key = config.get("general", "key") ?? 'key.pem';
+  var mesh = config.get("general", "mesh") ?? Defaults.meshEndpoint;
+  String? domain = config.get("general", "domain");
+  if (domain == null) {
+    final response = await http.get(Uri.parse("$mesh/api/self"));
+    if (response.statusCode != 200) {
+      Logger("").severe('GET /api/self failed: ${response.reasonPhrase}');
+      throw Exception('GET /api/self failed: ${response.reasonPhrase}');
+    }
+    final Map<String, dynamic> self = json.decode(response.body);
+    domain = "[" + self["address"] + "]";
+  }
+  int port = int.parse(
+      config.get("general", "port") ?? Defaults.signallingPort.toString());
+  var chain = config.get("general", "cert") ?? Defaults.tlsCertFn;
+  var key = config.get("general", "key") ?? Defaults.tlsKeyFn;
+
   var context = SecurityContext()
     ..useCertificateChain(chain)
     ..usePrivateKey(key);
@@ -44,10 +59,14 @@ void main(List<String> arguments) async {
   var htmlRoot = config.get("general", "html_root") ?? "web";
 
   final service = Service(
-      domain: domain, port: port, securityContext: context, htmlRoot: htmlRoot);
+      domain: domain,
+      port: port,
+      securityContext: context,
+      htmlRoot: htmlRoot,
+      mesh: mesh);
   HttpServer svr = await service.serve();
   service.ip = svr.address;
-  Logger('Main').info('Server running on https://$domain:$port');
+  Logger('Main').info('Server is running on https://$domain:$port');
 }
 
 class Service {
@@ -56,11 +75,13 @@ class Service {
     required this.port,
     required this.securityContext,
     required this.htmlRoot,
-  }) : signaler = Signaler(domain: domain, port: port);
+    required this.mesh,
+  }) : signaler = Signaler(domain: domain, port: port, mesh: mesh);
 
   final String htmlRoot;
   final String domain;
   final int port;
+  final String mesh;
   final SecurityContext securityContext;
   InternetAddress? ip;
   Connection? uiConn;

@@ -12,8 +12,4 @@ class DeviceInfo {
   static String get domain {
     return HTML.window.location.hostname!;
   }
-
-  static String get signalingLocation {
-    return "https://${HTML.window.location.hostname}:8086";
-  }
 }

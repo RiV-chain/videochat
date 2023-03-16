@@ -12,7 +12,12 @@ class Signaler {
   Connection? uiConn;
   final String domain;
   final int port;
-  Signaler({required this.domain, required this.port});
+  final String mesh;
+  Signaler({
+    required this.domain,
+    required this.port,
+    required this.mesh,
+  });
 
   static final log = Logger('Signaler');
 
@@ -46,6 +51,13 @@ class Signaler {
     var data = js['data'];
 
     switch (type) {
+      case 'config':
+        send(uiConn!, 'success', js['eventId'], {
+          "mesh": mesh,
+          "domain": domain,
+          "port": port,
+        });
+        break;
       case 'httpget':
         httpGet(js['eventId'], data);
         break;
